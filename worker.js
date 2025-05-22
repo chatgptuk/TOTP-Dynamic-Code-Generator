@@ -66,6 +66,19 @@ const htmlContent = `<!DOCTYPE html>
       margin-bottom: 20px;
       outline: none;
     }
+    .options {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      gap: 10px;
+    }
+    .options select, .options button {
+      flex: 1;
+      padding: 10px;
+      font-size: 14px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+    }
     input::placeholder { color: #999; }
     /* 验证码数字（闪动动画） */
     .otp {
@@ -144,6 +157,19 @@ const htmlContent = `<!DOCTYPE html>
     <p id="instruction">Please enter your 2FA secret code</p>
 
     <input id="secretInput" type="text" placeholder="Please enter your 2FA secret code" />
+    <div class="options">
+      <select id="algorithmSelect">
+        <option value="SHA-1">SHA-1</option>
+        <option value="SHA-256">SHA-256</option>
+        <option value="SHA-512">SHA-512</option>
+      </select>
+      <select id="digitsSelect">
+        <option value="6">6</option>
+        <option value="8">8</option>
+      </select>
+      <button id="pasteSecret">Paste</button>
+      <button id="clearSecret">Clear</button>
+    </div>
     <div class="otp" id="otpDisplay">------</div>
     <!-- 圆形倒计时 SVG -->
     <div class="progress-container">
@@ -196,25 +222,72 @@ const htmlContent = `<!DOCTYPE html>
 
     // ============== TOTP参数 ==============
     const timeStep = 30;
-    const digits = 6;
+    let algorithm = localStorage.getItem('totpAlgorithm') || 'SHA-1';
+    let digits = parseInt(localStorage.getItem('totpDigits')) || 6;
     let currentSecret = '';
 
     // DOM 引用
     const secretInput    = document.getElementById('secretInput');
+    const algorithmSelect= document.getElementById('algorithmSelect');
+    const digitsSelect   = document.getElementById('digitsSelect');
+    const pasteBtn       = document.getElementById('pasteSecret');
+    const clearBtn       = document.getElementById('clearSecret');
     const otpDisplay     = document.getElementById('otpDisplay');
     const messageDiv     = document.getElementById('message');
     const progressCircle = document.getElementById('progressCircle');
     const progressText   = document.getElementById('progressText');
     const circumference  = 2 * Math.PI * 62; // 半径62 => 周长≈389.557
 
+    // 初始化表单值
+    algorithmSelect.value = algorithm;
+    digitsSelect.value = digits;
+    const urlSecret = new URLSearchParams(location.search).get('secret');
+    const savedSecret = localStorage.getItem('totpSecret');
+    if (urlSecret) {
+      secretInput.value = urlSecret;
+      currentSecret = urlSecret.replace(/ /g, '').toUpperCase();
+      localStorage.setItem('totpSecret', urlSecret);
+    } else if (savedSecret) {
+      secretInput.value = savedSecret;
+      currentSecret = savedSecret.replace(/ /g, '').toUpperCase();
+    }
+
 
     // ============== 1) 监听 input 事件（键盘输入） ==============
     secretInput.addEventListener('input', (e) => {
-      let originalVal = e.target.value;                 // 用户原始输入
-      let processedVal = originalVal.replace(/ /g, '').toUpperCase(); 
-      // 只在逻辑上用 processedVal 来计算 TOTP，输入框依旧保留原始文本
+      const originalVal = e.target.value;                 // 用户原始输入
+      const processedVal = originalVal.replace(/ /g, '').toUpperCase();
       currentSecret = processedVal;
+      localStorage.setItem('totpSecret', originalVal);
       messageDiv.textContent = "";
+    });
+
+    algorithmSelect.addEventListener('change', (e) => {
+      algorithm = e.target.value;
+      localStorage.setItem('totpAlgorithm', algorithm);
+    });
+
+    digitsSelect.addEventListener('change', (e) => {
+      digits = parseInt(e.target.value);
+      localStorage.setItem('totpDigits', digits);
+    });
+
+    clearBtn.addEventListener('click', () => {
+      localStorage.removeItem('totpSecret');
+      secretInput.value = '';
+      currentSecret = '';
+      otpDisplay.textContent = '------';
+    });
+
+    pasteBtn.addEventListener('click', () => {
+      navigator.clipboard.readText().then(text => {
+        if (text) {
+          secretInput.value = text;
+          secretInput.dispatchEvent(new Event('input'));
+        }
+      }).catch(err => {
+        messageDiv.textContent = texts[currentLang].error + err.message;
+      });
     });
     
     
@@ -242,7 +315,7 @@ const htmlContent = `<!DOCTYPE html>
         return;
       }
       try {
-        const otp = await generateTOTP(currentSecret);
+        const otp = await generateTOTP(currentSecret, { algorithm, digits });
         otpDisplay.textContent = otp;
       } catch (err) {
         otpDisplay.textContent = "------";
@@ -263,6 +336,7 @@ const htmlContent = `<!DOCTYPE html>
     // ============== 5) 生成 TOTP ==============
     async function generateTOTP(secret, options = {}) {
       const algorithm = options.algorithm || "SHA-1";
+      const digitsLocal = options.digits || 6;
       const keyBytes = base32ToUint8Array(secret);
       const cryptoKey = await crypto.subtle.importKey(
         "raw",
@@ -287,8 +361,8 @@ const htmlContent = `<!DOCTYPE html>
         ((hmac[offset + 1] & 0xff) << 16) |
         ((hmac[offset + 2] & 0xff) << 8)  |
         (hmac[offset + 3] & 0xff);
-      const otpValue = binary % (10 ** digits);
-      return otpValue.toString().padStart(digits, "0");
+      const otpValue = binary % (10 ** digitsLocal);
+      return otpValue.toString().padStart(digitsLocal, "0");
     }
 
     // ============== 6) Base32 解码 ==============
