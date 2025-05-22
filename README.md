@@ -7,12 +7,7 @@ This project provides a simple Cloudflare Worker that serves a web based TOTP ge
 - Generate OTP codes from a Base32 secret
 - Countdown progress circle
 - Copy OTP to clipboard
-- Paste secret from the clipboard
+- Paste secret from clipboard with one click
 - English and Chinese interface
-- Persist secret, algorithm and digit settings in `localStorage`
-- Accept secret from the `?secret=` query parameter
-
-## Usage
-
-Deploy the `worker.js` script to Cloudflare Workers or run it locally using `wrangler dev`.
-
+- Persist the secret, algorithm and digit settings in `localStorage`
+- Accept the secret from the `?secret=` query parameter
