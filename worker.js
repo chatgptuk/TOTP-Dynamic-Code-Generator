@@ -40,10 +40,11 @@ const htmlContent = `<!DOCTYPE html>
       max-width: 480px;
       width: 100%;
       margin: 40px auto;
-      background: rgba(255, 255, 255, 0.9);
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(10px);
       color: #333;
-      border-radius: 10px;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+      border-radius: 12px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.2);
       padding: 20px;
     }
     h1 {
@@ -65,6 +66,26 @@ const htmlContent = `<!DOCTYPE html>
       border-radius: 6px;
       margin-bottom: 20px;
       outline: none;
+      box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);
+    }
+    .options {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      gap: 10px;
+    }
+    .options button {
+      flex: 1;
+      padding: 10px;
+      font-size: 14px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      background-color: #f0f0f0;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    .options button:hover {
+      background-color: #e0e0e0;
     }
     .options {
       display: flex;
@@ -88,7 +109,9 @@ const htmlContent = `<!DOCTYPE html>
       margin-bottom: 20px;
       cursor: pointer;
       user-select: none;
-      color: #111;
+      background: linear-gradient(90deg,#0072ff,#00c6ff);
+      -webkit-background-clip: text;
+      color: transparent;
       animation: glow 1.5s ease-in-out infinite alternate;
     }
     @keyframes glow {
@@ -158,6 +181,7 @@ const htmlContent = `<!DOCTYPE html>
 
     <input id="secretInput" type="text" placeholder="Please enter your 2FA secret code" />
     <div class="options">
+
       <select id="algorithmSelect">
         <option value="SHA-1">SHA-1</option>
         <option value="SHA-256">SHA-256</option>
@@ -167,6 +191,7 @@ const htmlContent = `<!DOCTYPE html>
         <option value="6">6</option>
         <option value="8">8</option>
       </select>
+
       <button id="pasteSecret">Paste</button>
       <button id="clearSecret">Clear</button>
     </div>
@@ -222,14 +247,21 @@ const htmlContent = `<!DOCTYPE html>
 
     // ============== TOTP参数 ==============
     const timeStep = 30;
+
+    const algorithm = 'SHA-1';
+    const digits = 6;
+
     let algorithm = localStorage.getItem('totpAlgorithm') || 'SHA-1';
     let digits = parseInt(localStorage.getItem('totpDigits')) || 6;
+
     let currentSecret = '';
 
     // DOM 引用
     const secretInput    = document.getElementById('secretInput');
+
     const algorithmSelect= document.getElementById('algorithmSelect');
     const digitsSelect   = document.getElementById('digitsSelect');
+
     const pasteBtn       = document.getElementById('pasteSecret');
     const clearBtn       = document.getElementById('clearSecret');
     const otpDisplay     = document.getElementById('otpDisplay');
@@ -239,8 +271,10 @@ const htmlContent = `<!DOCTYPE html>
     const circumference  = 2 * Math.PI * 62; // 半径62 => 周长≈389.557
 
     // 初始化表单值
+
     algorithmSelect.value = algorithm;
     digitsSelect.value = digits;
+
     const urlSecret = new URLSearchParams(location.search).get('secret');
     const savedSecret = localStorage.getItem('totpSecret');
     if (urlSecret) {
@@ -262,6 +296,17 @@ const htmlContent = `<!DOCTYPE html>
       messageDiv.textContent = "";
     });
 
+
+    pasteBtn.addEventListener('click', async () => {
+      try {
+        const text = await navigator.clipboard.readText();
+        secretInput.value = text;
+        currentSecret = text.replace(/ /g, '').toUpperCase();
+        localStorage.setItem('totpSecret', text);
+      } catch (err) {
+        messageDiv.textContent = texts[currentLang].error + err.message;
+      }
+
     algorithmSelect.addEventListener('change', (e) => {
       algorithm = e.target.value;
       localStorage.setItem('totpAlgorithm', algorithm);
@@ -270,6 +315,7 @@ const htmlContent = `<!DOCTYPE html>
     digitsSelect.addEventListener('change', (e) => {
       digits = parseInt(e.target.value);
       localStorage.setItem('totpDigits', digits);
+
     });
 
     clearBtn.addEventListener('click', () => {
@@ -278,6 +324,7 @@ const htmlContent = `<!DOCTYPE html>
       currentSecret = '';
       otpDisplay.textContent = '------';
     });
+
 
     pasteBtn.addEventListener('click', () => {
       navigator.clipboard.readText().then(text => {
@@ -289,6 +336,7 @@ const htmlContent = `<!DOCTYPE html>
         messageDiv.textContent = texts[currentLang].error + err.message;
       });
     });
+
     
     
 
@@ -333,10 +381,13 @@ const htmlContent = `<!DOCTYPE html>
       progressCircle.style.strokeDashoffset = offset;
     }
 
-    // ============== 5) 生成 TOTP ==============
+
+    async function generateTOTP(secret) {
+
     async function generateTOTP(secret, options = {}) {
       const algorithm = options.algorithm || "SHA-1";
       const digitsLocal = options.digits || 6;
+
       const keyBytes = base32ToUint8Array(secret);
       const cryptoKey = await crypto.subtle.importKey(
         "raw",
